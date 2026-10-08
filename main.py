@@ -1,9 +1,13 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 
 from data import find_course, get_all_courses
 from models import Course
 
 app = FastAPI(title="Course Catalog API")
+
+
+def pagination(page: int = 1, page_size: int = 20):
+    return {"offset": (page - 1) * page_size, "limit": page_size}
 
 
 @app.get("/")
@@ -12,7 +16,11 @@ def read_root():
 
 
 @app.get("/courses", response_model=list[Course])
-def list_courses(is_elective: bool | None = None, sort: str = "popular"):
+def list_courses(
+    is_elective: bool | None = None,
+    sort: str = "popular",
+    p: dict = Depends(pagination),
+):
     courses = get_all_courses()
     # "is not None", not a truthiness check: otherwise ?is_elective=false is ignored
     if is_elective is not None:
@@ -21,7 +29,8 @@ def list_courses(is_elective: bool | None = None, sort: str = "popular"):
         courses = sorted(courses, key=lambda c: c.title)
     else:
         courses = sorted(courses, key=lambda c: c.likes, reverse=True)
-    return courses
+    # Filter -> sort -> only then cut out the page
+    return courses[p["offset"] : p["offset"] + p["limit"]]
 
 
 @app.get("/courses/{course_id}", response_model=Course)
