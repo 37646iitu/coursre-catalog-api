@@ -1,13 +1,11 @@
 from models import Course
 
-# The same six courses as in course-catalog/lib/courses.ts
 COURSES: list[Course] = [
     Course(
         id="modern-frontend",
         title="Modern Frontend: React & Next.js",
         description="React 19, Server Components, and the App Router.",
         credits=5,
-        # is_elective is not set — the default value False applies
         likes=24,
     ),
     Course(
