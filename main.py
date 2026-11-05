@@ -1,3 +1,4 @@
+import os
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -10,9 +11,12 @@ app = FastAPI(title="Course Catalog API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:3000",
+    ).split(","),
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
 )
 
 ENROLLMENTS: list[Enrollment] = []

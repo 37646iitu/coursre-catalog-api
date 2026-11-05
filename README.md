@@ -29,6 +29,20 @@ The backend now uses `CORSMiddleware` to allow browser requests from the exact
 frontend origin `http://localhost:3000`. CORS is needed for Client Component
 requests because the frontend and backend have different origins.
 
+For the bonus configuration task, the origin list comes from the
+`CORS_ORIGINS` environment variable. If the variable is absent, the default is
+`http://localhost:3000`. Multiple origins are comma-separated. For example, in
+PowerShell:
+
+```powershell
+$env:CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
+fastapi dev main.py
+```
+
+The CORS policy explicitly permits only the HTTP methods used by this API,
+`GET` and `POST`, and the request header needed for JSON enrollment bodies,
+`Content-Type`. A preflight requesting `DELETE` or `Authorization` is rejected.
+
 `CamelModel` keeps Python field names in snake_case while exposing body and
 response fields in camelCase. For example, `is_elective`, `course_id`, and
 `student_name` become `isElective`, `courseId`, and `studentName` in JSON. Query
