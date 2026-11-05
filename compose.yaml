@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: course-catalog-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: course_catalog
+      POSTGRES_USER: catalog_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - course_catalog_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catalog_app -d course_catalog"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  course_catalog_pgdata:

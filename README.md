@@ -5,33 +5,37 @@ PostgreSQL, and Alembic migrations (Labs 4-7 of Advanced Web Technologies).
 
 ## How to run
 
-You need Python 3.11 or newer and PostgreSQL 16 or newer.
+You need Python 3.11 or newer and Docker Desktop. PostgreSQL runs in the
+`course-catalog-postgres` container and is exposed on host port `5433`, so it
+does not conflict with a locally installed PostgreSQL on port `5432`.
 
-Once, as the `postgres` superuser, create the role and the database:
-
-```sql
-CREATE ROLE catalog_app LOGIN PASSWORD 'change-me';
-CREATE DATABASE course_catalog OWNER catalog_app;
-```
-
-Then run the following commands from the project folder in Windows PowerShell:
+Run the following commands from the project folder in Windows PowerShell:
 
 ```powershell
+docker compose up -d --wait db
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
 alembic upgrade head
-$env:PGPASSWORD = "change-me"
-psql -h localhost -U catalog_app -d course_catalog -v ON_ERROR_STOP=1 -f seed.sql
+docker compose cp seed.sql db:/tmp/seed.sql
+docker compose exec db psql -v ON_ERROR_STOP=1 -U catalog_app -d course_catalog -f /tmp/seed.sql
 alembic check
 fastapi dev main.py
 ```
 
+Useful Docker commands:
+
+```powershell
+docker compose ps          # show the database status
+docker compose logs db     # show PostgreSQL logs
+docker compose stop db     # stop the database without deleting its data
+docker compose down        # remove the container but keep its named volume
+```
+
 For macOS or Linux, activate the environment with
-`source .venv/bin/activate`, copy the environment file with
-`cp .env.example .env`, and export the password with
-`export PGPASSWORD=change-me`.
+`source .venv/bin/activate` and copy the environment file with
+`cp .env.example .env`.
 
 API documentation is available at <http://localhost:8000/docs>.
 The password `change-me` is for teaching only. Real passwords must never be
