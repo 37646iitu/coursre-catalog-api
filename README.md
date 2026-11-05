@@ -1,98 +1,141 @@
-# Course Catalog API
+# course-catalog-api
 
-FastAPI backend for the Course Catalog frontend. It serves the six courses,
-accepts likes and enrollments, and exposes an OpenAPI UI for testing.
+Backend of the course catalog built with FastAPI, SQLAlchemy 2.1,
+PostgreSQL, and Alembic migrations (Labs 4-7 of Advanced Web Technologies).
 
 ## How to run
 
-Requires Python 3.10 or newer.
+You need Python 3.11 or newer and PostgreSQL 16 or newer.
 
-```bash
-# macOS / Linux
-python3 -m venv .venv
-source .venv/bin/activate
+Once, as the `postgres` superuser, create the role and the database:
 
-# Windows PowerShell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
-fastapi dev main.py
+```sql
+CREATE ROLE catalog_app LOGIN PASSWORD 'change-me';
+CREATE DATABASE course_catalog OWNER catalog_app;
 ```
 
-The API runs at <http://localhost:8000>. Interactive documentation is available
-at <http://localhost:8000/docs>.
-
-## What changed in Lab 5
-
-The backend now uses `CORSMiddleware` to allow browser requests from the exact
-frontend origin `http://localhost:3000`. CORS is needed for Client Component
-requests because the frontend and backend have different origins.
-
-For the bonus configuration task, the origin list comes from the
-`CORS_ORIGINS` environment variable. If the variable is absent, the default is
-`http://localhost:3000`. Multiple origins are comma-separated. For example, in
-PowerShell:
+Then run the following commands from the project folder in Windows PowerShell:
 
 ```powershell
-$env:CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:3000"
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+alembic upgrade head
+$env:PGPASSWORD = "change-me"
+psql -h localhost -U catalog_app -d course_catalog -v ON_ERROR_STOP=1 -f seed.sql
+alembic check
 fastapi dev main.py
 ```
 
-The CORS policy explicitly permits only the HTTP methods used by this API,
-`GET` and `POST`, and the request header needed for JSON enrollment bodies,
-`Content-Type`. A preflight requesting `DELETE` or `Authorization` is rejected.
+For macOS or Linux, activate the environment with
+`source .venv/bin/activate`, copy the environment file with
+`cp .env.example .env`, and export the password with
+`export PGPASSWORD=change-me`.
 
-`CamelModel` keeps Python field names in snake_case while exposing body and
-response fields in camelCase. For example, `is_elective`, `course_id`, and
-`student_name` become `isElective`, `courseId`, and `studentName` in JSON. Query
-parameters such as `is_elective` keep their original names.
+API documentation is available at <http://localhost:8000/docs>.
+The password `change-me` is for teaching only. Real passwords must never be
+committed to a repository.
 
-The server stores likes and enrollments in memory. They return to their initial
-state whenever the backend restarts.
+## What changed in the API
+
+- Courses, students, enrollments, and likes now live in PostgreSQL and survive
+  an application restart.
+- `POST /enrollments` accepts `courseId` and `studentId`; a student is created
+  first through `POST /students`.
+- `GET /enrollments` returns joined course titles and student names.
+- `GET /courses` supports the new `level` filter, and course responses include
+  the required level.
+- Database constraint violations become specific `409` and `404` responses.
+
+The previous Lab 5 bonuses remain available: `GET /courses` supports the `q`
+title search, validated pagination and sorting, and CORS origins can be supplied
+through the comma-separated `CORS_ORIGINS` environment variable. Its default is
+`http://localhost:3000`.
 
 ## Routes
 
 | Method and route | Description |
 |---|---|
 | `GET /` | Checks that the API is running |
-| `GET /courses` | Lists courses with filtering, sorting, search, and pagination |
-| `GET /courses/{course_id}` | Returns one course or 404 |
-| `POST /courses/{course_id}/like` | Adds one like and returns the updated course |
-| `POST /enrollments` | Creates an enrollment and returns 201 |
-| `GET /enrollments` | Lists the in-memory enrollments |
+| `GET /courses` | Filters, searches, sorts, and paginates courses |
+| `GET /courses/{course_id}` | Returns one course or `404` |
+| `POST /courses/{course_id}/like` | Atomically increments likes |
+| `POST /students` | Creates a student |
+| `POST /enrollments` | Enrolls an existing student in a course |
+| `GET /enrollments` | Lists enrollments with course and student data |
+| `GET /stats/courses` | Counts enrollments for every course |
 
-Example like response:
+## Migrations
 
-```json
-{
-  "id": "web-security",
-  "title": "Web Security Essentials",
-  "description": "JWT/OAuth2, defending against XSS, CSRF, SQL injection.",
-  "credits": 4,
-  "isElective": false,
-  "likes": 22
-}
+| Command | What it does |
+|---|---|
+| `alembic upgrade head` | Applies all missing migrations |
+| `alembic downgrade -1` | Rolls back the last migration |
+| `alembic current` | Shows the database version |
+| `alembic history` | Shows the migration chain |
+| `alembic heads` | Shows all current heads |
+| `alembic revision --autogenerate -m "text"` | Drafts a migration from the model/database difference |
+| `alembic check` | Reports whether the models and database have diverged |
+| `alembic upgrade 0001:0002 --sql` | Prints migration SQL without running it |
+| `alembic stamp head` | Marks an existing matching schema as current without running migrations |
+
+Migration `0001` creates the three catalog tables, all constraints, and the
+foreign-key index. Migration `0002` adds the required `courses.level` column in
+three safe steps: allow `NULL`, fill existing rows, then set `NOT NULL`.
+
+## Experiment log
+
+| # | Experiment | What I saw | Cause | How I fixed it |
+|---|---|---|---|---|
+| 1 | Changed the `uq` naming template | `check_models.py` showed `*_unique` only in models and `*_key` only in the database | Constraint names no longer matched PostgreSQL | Restored `%(table_name)s_%(column_0_N_name)s_key`; both differences became `none` |
+| 2 | Removed `min_length` and sent name `N` | PostgreSQL raised `CheckViolation` for `students_name_check`; the API returned `500` | Pydantic no longer stopped invalid input, and this CHECK is intentionally not mapped as a client conflict | Restored `Field(min_length=2)`; Pydantic returns `422` before the INSERT |
+| 3 | Misspelled `students_email_key` in the response map | A duplicate email raised `UniqueViolation`; the API returned `500` while the real constraint name appeared in the traceback | The response map requires an exact constraint-name match | Restored `students_email_key`; duplicate email returns `409` |
+| 4 | Dropped `NOT NULL` and changed `title` to `varchar(100)` manually | `alembic check` reported `modify_nullable`, then `modify_type`, and exited with `FAILED` | The database no longer matched `Base.metadata` | Restored `NOT NULL` and `text`; `alembic check` became clean |
+| 5 | Tried the autogenerated required `level` column on existing rows | PostgreSQL raised `NotNullViolation: column "level" contains null values`; the database stayed at `0001` | Existing rows had no value for the new required column | Rewrote `0002` as `NULL`, data fill, then `NOT NULL` |
+| 6 | Commented out `import models` in `env.py` | Autogenerate proposed dropping the index and all three tables | `Base.metadata` was empty because the model classes were never registered | Restored the import and deleted the dangerous draft |
+| 7 | Added a `phone` field without a migration | `alembic check` reported an added `students.phone` column and failed | The model had moved ahead of the database | Removed the experimental field; in real work it would need a migration in the same commit |
+| 8 | Created two revisions from `0002` | `alembic heads` showed `0003` and `0004`; `upgrade head` refused with `Multiple head revisions` | Two branches had independent migration heads | Verified a merge revision gives one head, then removed the experimental files so the final head is `0002` |
+
+## Decisions
+
+- The API maps errors by constraint name because one SQLSTATE such as `23505`
+  can represent several different UNIQUE violations that need different client
+  messages. The INSERT is attempted and the `IntegrityError` is handled after
+  `commit()` because a preliminary `SELECT` has a race condition.
+- A like uses `likes = likes + 1` inside one database `UPDATE`. Reading the
+  value into Python and writing it back can lose one of two concurrent updates;
+  the atomic statement lets PostgreSQL serialize updates to the row.
+- Migration `0002` uses three steps because adding a `NOT NULL` column directly
+  cannot work while existing rows have no value. The nullable step creates the
+  column, the data migration fills every old row, and only then can the schema
+  safely require the value.
+
+## Migration 0002 self-check
+
+| What to check | Result |
+|---|---|
+| Goal and steps | Yes - one required `level` column is added in three explicit steps |
+| Data | Yes - electives become `beginner`; all other existing courses become `intermediate` before `NOT NULL` |
+| Renames and drops | Yes - no rename is disguised as add/drop; only `level` is added |
+| Rollback | Yes - `downgrade()` drops `level`; its values are intentionally lost and regenerated by the upgrade rule |
+| Verification | Yes - offline SQL was reviewed and the `upgrade -> downgrade -> upgrade` cycle passed |
+| History | Yes - `0001 -> 0002` has one head and the model change is committed with its migration |
+| Application | Yes - `CourseOut`, `GET /courses`, the level filter, and `seed.sql` were updated together |
+
+## Verification
+
+Run these commands before submission:
+
+```powershell
+python check_db.py
+python check_models.py
+alembic current
+alembic check
+alembic heads
+python try_errors.py  # while the API server is running
 ```
 
-Example enrollment request:
-
-```json
-{
-  "courseId": "web-security",
-  "studentName": "Aigerim"
-}
-```
-
-Example 201 response:
-
-```json
-{
-  "courseId": "web-security",
-  "studentName": "Aigerim",
-  "id": 1
-}
-```
-
-A one-character `studentName` returns 422, and an unknown course returns 404
-with `{"detail":"Course not found"}`.
+Expected key results are `6`, `3`, and `6` rows, no model/database name
+differences, migration `0002 (head)`, one head, no pending upgrade operations,
+and `5 of 5 as expected` from the HTTP error check.
