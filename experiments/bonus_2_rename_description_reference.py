@@ -4,7 +4,15 @@ This file stays outside ``alembic/versions`` and shows how to rename a column
 without replacing it and losing the values stored in it.
 """
 
+from typing import Sequence, Union
+
 from alembic import op
+
+
+revision: str = "0003_rename_description_demo"
+down_revision: Union[str, Sequence[str], None] = "0002"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:

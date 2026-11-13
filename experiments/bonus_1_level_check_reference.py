@@ -4,7 +4,15 @@ This file stays outside ``alembic/versions`` so it cannot change the real
 migration chain. It demonstrates the manual CHECK migration from the lab.
 """
 
+from typing import Sequence, Union
+
 from alembic import op
+
+
+revision: str = "0003_level_check_demo"
+down_revision: Union[str, Sequence[str], None] = "0002"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
