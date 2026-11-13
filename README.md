@@ -163,3 +163,19 @@ and `5 of 5 as expected` from the HTTP error check.
 5. **Database cascade.** `python try_delete.py` shows that
    `passive_deletes=True` lets PostgreSQL apply `ON DELETE CASCADE` instead of
    making the ORM write `student_id = NULL`. The demonstration is rolled back.
+
+The temporary migration examples for bonuses 1 and 2 are kept as reference-only
+files in `experiments/`. They deliberately stay outside `alembic/versions`, so
+Alembic does not discover or run them and the real migration head remains
+`0002`. The matching SQL demonstration statements are stored, fully commented
+out, in `experiments/bonus_demo_queries.sql`.
+
+- `experiments/bonus_1_level_check_reference.py` shows the manual CHECK and the
+  correct use of `op.f()`.
+- `experiments/bonus_2_rename_description_reference.py` shows a data-preserving
+  column rename with `alter_column(new_column_name=...)`.
+- `experiments/bonus_demo_queries.sql` shows what to type in a PostgreSQL query
+  console after applying one reference migration to a disposable database.
+
+Do not copy both Python examples into `alembic/versions` together: they are two
+alternative experiments that would otherwise create competing `0003` heads.
